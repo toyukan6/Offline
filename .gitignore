@@ -1,0 +1,24 @@
+obj
+Temp
+Library
+ExportedObj
+*.pidb
+*.csproj
+*.unityproj
+*.booproj
+.DS_Store
+.DS_Store?
+._*
+*.svd
+*.user
+*.userprefs
+*.suo
+*.sln
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.dat
+compilation log.txt
+Test.unity
+Textures/*
