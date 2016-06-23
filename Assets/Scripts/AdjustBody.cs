@@ -1,4 +1,4 @@
-﻿using MathNet.Numerics.Statistics;
+﻿    using MathNet.Numerics.Statistics;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -25,11 +25,14 @@ namespace EnvironmentMaker {
         GameObject cursor;
         JointType selectedType = JointType.SpineBase;
         public GameObject Selected;
+        /// <summary>
+        /// 赤いやつ
+        /// </summary>
         private GameObject selectedPointer;
         public GameObject MainCamera;
         public GameObject OverViewCamera;
-        private Vector3 stopPosition;
-        private Vector3 stopEularAngle;
+        private Vector3 stopCameraPosition;
+        private Vector3 stopCameraEularAngle;
         private Vector3 movePosition;
         private Vector3 moveEularAngle;
         private bool stopped = true;
@@ -48,6 +51,9 @@ namespace EnvironmentMaker {
         public string DirName = "result";
         private string tmpDirName;
 
+        bool movePointCloud = false;
+        int selectedPCNumber = 0;
+
         // Use this for initialization
         void Start() {
             mesh = new Mesh();
@@ -60,119 +66,150 @@ namespace EnvironmentMaker {
             }
             GetComponent<MeshFilter>().mesh = mesh;
             manager = GameObject.FindObjectOfType<PolygonManager>();
-            LoadModels(DirName);
-            LoadIndexCSV(DirName);
-            LoadBodyDump(DirName);
-            var array = new int[10];
             foreach (JointType type in Enum.GetValues(typeof(JointType))) {
                 var obj = Instantiate(Pointer) as GameObject;
                 obj.name = Enum.GetName(typeof(JointType), type);
                 obj.GetComponentInChildren<TextMesh>().text = obj.name;
+                obj.SetActive(false);
                 pointers.Add(obj);
             }
-            var positions = new Vector3[pointers.Count];
-            var thisPos = this.transform.position;
-            foreach (JointType type in Enum.GetValues(typeof(JointType))) {
-                pointers[(int)type].transform.position = this.transform.position + polygonData[0].PartsPosition(type);
-                pointers[(int)type].SetActive(false);
-            }
-            firstBodyParts = new Vector3[FrameAmount, Enum.GetNames(typeof(JointType)).Length];
             baseIndex = 0;
             selectedPointer = Instantiate(Selected);
-            stopPosition = this.transform.position;
-            stopEularAngle = this.transform.localEulerAngles;
+            stopCameraPosition = MainCamera.transform.position;
+            stopCameraEularAngle = MainCamera.transform.localEulerAngles;
             movePosition = new Vector3(1.1f, 1.4f, -1);
             moveEularAngle = new Vector3(0, 0, 0);
             tmpDirName = DirName;
-            PolygonManager.Load(DirName);
-            UpdateMesh();
+            if (DirName != "" && Directory.Exists(@"polygons/" + DirName)) {
+                LoadModels(DirName);
+                LoadIndexCSV(DirName);
+                LoadBodyDump(DirName);
+                foreach (JointType type in Enum.GetValues(typeof(JointType))) {
+                    pointers[(int)type].transform.position = this.transform.position + polygonData[0].PartsPosition(type);
+                }
+                PolygonManager.Load(DirName);
+                UpdateMesh();
+            }
+        }
+
+        private Vector3 InputASDWZX(Vector3 before) {
+            if (Input.GetKey(KeyCode.D)) {
+                before += new Vector3(0.01f, 0, 0);
+            } else if (Input.GetKey(KeyCode.A)) {
+                before -= new Vector3(0.01f, 0, 0);
+            } else if (Input.GetKey(KeyCode.W)) {
+                before += new Vector3(0, 0, 0.01f);
+            } else if (Input.GetKey(KeyCode.S)) {
+                before -= new Vector3(0, 0, 0.01f);
+            } else if (Input.GetKey(KeyCode.X)) {
+                before += new Vector3(0, 0.01f, 0);
+            } else if (Input.GetKey(KeyCode.Z)) {
+                before -= new Vector3(0, 0.01f, 0);
+            }
+            return before;
+        }
+
+        private int InputKeyUpDown(int now, int max) {
+            if (Input.GetKeyDown(KeyCode.DownArrow)) {
+                return (now + 1) % max;
+            } else if (Input.GetKeyDown(KeyCode.UpArrow)) {
+                return (now - 1 + max) % max;
+            } else {
+                return now;
+            }
         }
 
         double beforeMag = double.MaxValue;
         void Update() {
-            int number = pointsNumbers[0];
-            if (stopped) {
-                GameObject selectedObj = pointers[(int)selectedType];
-
-                if (Input.GetKey(KeyCode.D)) {
-                    polygonData[number].Offsets[selectedType] += new Vector3(0.01f, 0, 0);
-                } else if (Input.GetKey(KeyCode.A)) {
-                    polygonData[number].Offsets[selectedType] -= new Vector3(0.01f, 0, 0);
-                } else if (Input.GetKey(KeyCode.W)) {
-                    polygonData[number].Offsets[selectedType] += new Vector3(0, 0, 0.01f);
-                } else if (Input.GetKey(KeyCode.S)) {
-                    polygonData[number].Offsets[selectedType] -= new Vector3(0, 0, 0.01f);
-                } else if (Input.GetKey(KeyCode.X)) {
-                    polygonData[number].Offsets[selectedType] += new Vector3(0, 0.01f, 0);
-                } else if (Input.GetKey(KeyCode.Z)) {
-                    polygonData[number].Offsets[selectedType] -= new Vector3(0, 0.01f, 0);
-                }
-
-                //selectedObj.transform.position = firstJoint[number, (int)selectedType] + offsets[number, (int)selectedType];
-                selectedPointer.transform.position = selectedObj.transform.position;
-                var beforeType = selectedType;
-
-                if (Input.GetKeyDown(KeyCode.DownArrow)) {
-                    selectedType = (JointType)(((int)selectedType + 1) % Enum.GetNames(typeof(JointType)).Length);
-                } else if (Input.GetKeyDown(KeyCode.UpArrow)) {
-                    selectedType = (JointType)(((int)selectedType - 1 + Enum.GetNames(typeof(JointType)).Length) % Enum.GetNames(typeof(JointType)).Length);
-                }
-
-                if (beforeType != selectedType) {
-                    pointers[(int)beforeType].SetActive(false);
-                    pointers[(int)selectedType].SetActive(true);
-                }
-
-                int before = pointsNumbers[0];
-                if (Input.GetKeyDown(KeyCode.RightArrow)) {
-                    pointsNumbers[0] = (pointsNumbers[0] + 1) % FrameAmount;
-                } else if (Input.GetKeyDown(KeyCode.LeftArrow)) {
-                    pointsNumbers[0] = (pointsNumbers[0] - 1 + FrameAmount) % FrameAmount;
-                }
-                if (before != pointsNumbers[0]) {
-                    AdjustStopCamera(before);
-                }
-                OverViewCamera.transform.position = pointers[(int)selectedType].transform.position + new Vector3(0, 0.5f, 0);
-
-                if (Input.GetKey(KeyCode.J)) {
-                    OverViewCamera.transform.position += new Vector3(0, -0.01f, 0);
-                } else if (Input.GetKey(KeyCode.K)) {
-                    OverViewCamera.transform.position += new Vector3(0, 0.01f, 0);
-                } else if (Input.GetKey(KeyCode.H)) {
-                    OverViewCamera.transform.position += new Vector3(-0.01f, 0, 0);
-                } else if (Input.GetKey(KeyCode.L)) {
-                    OverViewCamera.transform.position += new Vector3(0.01f, 0, 0);
-                }
-            }
-
-            if (Input.GetKeyDown(KeyCode.Space)) {
-                stopped = !stopped;
+            if (loadEnd) {
                 if (stopped) {
-                    OverViewCamera.SetActive(true);
-                    selectedPointer.SetActive(true);
-                    MainCamera.transform.position = stopPosition;
-                    MainCamera.transform.eulerAngles = stopEularAngle;
-                    for (int i = 0; i < kinectNums; i++) {
-                        pointsNumbers[i] = 0;
-                        beforeTime[i] = 0;
+                    GameObject selectedObj = pointers[(int)selectedType];
+
+                    int number = pointsNumbers[0];
+                    Vector3 beforeInput = (movePointCloud) ? polygonData[number].PointCloudOffsets[selectedPCNumber] : polygonData[number].Offsets[selectedType];
+                    Vector3 afterInput = InputASDWZX(beforeInput);
+                    if (movePointCloud) {
+                        polygonData[number].PointCloudOffsets[selectedPCNumber] = afterInput;
+                    } else {
+                        polygonData[number].Offsets[selectedType] = afterInput;
                     }
-                    var positions = new Vector3[pointers.Count];
-                    var thisPos = this.transform.position;
-                    var pn = pointsNumbers[0];
-                    foreach (JointType type in Enum.GetValues(typeof(JointType))) {
-                        pointers[(int)type].transform.position = this.transform.position + polygonData[pn].PartsPosition(type);
+
+                    //selectedObj.transform.position = firstJoint[number, (int)selectedType] + offsets[number, (int)selectedType];
+                    if (movePointCloud) {
+                        selectedPCNumber = InputKeyUpDown(selectedPCNumber, kinectNums);
+                    } else {
+                        selectedPointer.transform.position = selectedObj.transform.position;
+                        var beforeType = selectedType;
+                        selectedType = (JointType)InputKeyUpDown((int)selectedType, Enum.GetNames(typeof(JointType)).Length);
+
+                        if (beforeType != selectedType) {
+                            pointers[(int)beforeType].SetActive(false);
+                            pointers[(int)selectedType].SetActive(true);
+                        }
                     }
+
+                    int before = pointsNumbers[0];
+                    if (Input.GetKeyDown(KeyCode.RightArrow)) {
+                        pointsNumbers[0] = (pointsNumbers[0] + 1) % FrameAmount;
+                    } else if (Input.GetKeyDown(KeyCode.LeftArrow)) {
+                        pointsNumbers[0] = (pointsNumbers[0] - 1 + FrameAmount) % FrameAmount;
+                    }
+                    if (before != pointsNumbers[0]) {
+                        AdjustStopCamera(before);
+                    }
+                    OverViewCamera.transform.position = pointers[(int)selectedType].transform.position + new Vector3(0, 0.5f, 0);
+
+                    if (Input.GetKey(KeyCode.J)) {
+                        OverViewCamera.transform.position += new Vector3(0, -0.01f, 0);
+                    } else if (Input.GetKey(KeyCode.K)) {
+                        OverViewCamera.transform.position += new Vector3(0, 0.01f, 0);
+                    } else if (Input.GetKey(KeyCode.H)) {
+                        OverViewCamera.transform.position += new Vector3(-0.01f, 0, 0);
+                    } else if (Input.GetKey(KeyCode.L)) {
+                        OverViewCamera.transform.position += new Vector3(0.01f, 0, 0);
+                    }
+                }
+
+                if (movePointCloud) {
                     UpdateMesh();
-                } else {
-                    OverViewCamera.SetActive(false);
-                    selectedPointer.SetActive(false);
-                    MainCamera.transform.position = movePosition;
-                    MainCamera.transform.eulerAngles = moveEularAngle;
-                    for (int i = 0; i < kinectNums; i++) {
-                        pointsNumbers[i] = 0;
-                        beforeTime[i] = 0;
+                }
+
+                if (Input.GetKeyDown(KeyCode.Space)) {
+                    stopped = !stopped;
+                    if (stopped) {
+                        OverViewCamera.SetActive(true);
+                        selectedPointer.SetActive(true);
+                        MainCamera.transform.position = stopCameraPosition;
+                        MainCamera.transform.localEulerAngles = stopCameraEularAngle;
+                        for (int i = 0; i < kinectNums; i++) {
+                            pointsNumbers[i] = 0;
+                            beforeTime[i] = 0;
+                        }
+                        var positions = new Vector3[pointers.Count];
+                        var thisPos = this.transform.position;
+                        var pn = pointsNumbers[0];
+                        foreach (JointType type in Enum.GetValues(typeof(JointType))) {
+                            pointers[(int)type].transform.position = this.transform.position + polygonData[pn].PartsPosition(type);
+                        }
+                        UpdateMesh();
+                        foreach (JointType type in Enum.GetValues(typeof(JointType))) {
+                            pointers[(int)type].SetActive(false);
+                        }
+                        pointers[(int)selectedType].SetActive(true);
+                    } else {
+                        OverViewCamera.SetActive(false);
+                        selectedPointer.SetActive(false);
+                        MainCamera.transform.position = movePosition;
+                        MainCamera.transform.eulerAngles = moveEularAngle;
+                        for (int i = 0; i < kinectNums; i++) {
+                            pointsNumbers[i] = 0;
+                            beforeTime[i] = 0;
+                        }
+                        CalcCorrection();
+                        foreach (JointType type in Enum.GetValues(typeof(JointType))) {
+                            pointers[(int)type].SetActive(true);
+                        }
                     }
-                    CalcCorrection();
                 }
             }
         }
@@ -220,11 +257,10 @@ namespace EnvironmentMaker {
             var colors = new List<Color>();
             for (int i = 0; i < kinectNums; i++) {
                 //if (i == 0) continue;
-                foreach (var v in polygonData[pointsNumbers[i]].Positions[i]) {
-                    points.Add(v);
-                }
-                foreach (var c in polygonData[pointsNumbers[i]].Colors[i]) {
-                    colors.Add(c);
+                var offset = polygonData[pointsNumbers[i]].PointCloudOffsets[i];
+                foreach (var p in polygonData[pointsNumbers[i]].KinectPoints[i]) {
+                    points.Add(p.GetVector3() + offset);
+                    colors.Add(p.GetColor());
                 }
             }
             mesh.vertices = points.ToArray();
@@ -233,6 +269,13 @@ namespace EnvironmentMaker {
         }
 
         private void CalcCorrection() {
+            foreach (var p in polygonData) {
+                foreach (JointType type in Enum.GetValues(typeof(JointType))) {
+                    var off = (p.Offsets[type] == Vector3.zero) ? Vector3.zero : p.OffsetsAndCorrection(type);
+                    p.Reset(type);
+                    p.Offsets[type] = off;
+                }
+            }
             for (int i = 0; i < firstBodyParts.GetLength(0); i++) {
                 var positions = new Vector3[pointers.Count];
                 var thisPos = this.transform.position;
@@ -246,8 +289,10 @@ namespace EnvironmentMaker {
                     reworkIndexes.Add(i);
                 }
             }
-            ArmCorrection(reworkIndexes);
-            LegCorrection(reworkIndexes);
+            if (reworkIndexes.Count > 0) {
+                ArmCorrection(reworkIndexes);
+                LegCorrection(reworkIndexes);
+            }
         }
 
         private void ArmCorrection(List<int> reworkIndexes) {
@@ -322,6 +367,7 @@ namespace EnvironmentMaker {
                         }
                     }
                 }
+                if (lengthes.Count == 0) continue;
                 float length = lengthes.Average();
                 remove.ForEach(r => reworkIndexes.Remove(r));
                 Vector3 histVec = Vector3.zero, histCVec = Vector3.zero;
@@ -364,7 +410,7 @@ namespace EnvironmentMaker {
                     if (averageHistgram != null)
                         histVec = SearchHistgram(averageHistgram, s, existsIndexes, joint);
                     if (averageCHistgram != null)
-                        histCVec = SearchHistgram(averageCHistgram, s, existsIndexes, joint);
+                        histCVec = SearchHistgram(averageCHistgram, s, existsCIndexes, joint);
                     Vector3 result = Vector3.zero;
                     if (histVec != Vector3.zero && histCVec != Vector3.zero) {
                         result = (histVec + histCVec) / 2;
@@ -379,8 +425,9 @@ namespace EnvironmentMaker {
                         polygonData[s].PartsCorrection[joint] = Vector3.zero;
                         var beforePosition = polygonData[s].PartsPosition(beforeJoint);
                         var nowPosition = polygonData[s].PartsPosition(joint) + result;
-                        result = (nowPosition - beforePosition).normalized * length + beforePosition;
-                        print(s + "の" + Enum.GetName(typeof(JointType), joint) + ":" + result);
+                        result = (nowPosition - beforePosition).normalized * length + beforePosition - polygonData[s].PartsPosition(joint);
+                        //if (s == 1)
+                        //    print(s + "の" + Enum.GetName(typeof(JointType), joint) + ":" + result);
                         polygonData[s].PartsCorrection[joint] = result;
                     }
                 }
@@ -403,7 +450,7 @@ namespace EnvironmentMaker {
                     startAndEnd.Add(Tuple.Create(start, end));
                     for (int j = 0; j < startAndEnd.Count; j++) {
                         start = startAndEnd[j].First - 1;
-                        end = startAndEnd[j].Second;
+                        end = Math.Min(startAndEnd[j].Second, polygonData.Length);
                         try {
                             Vector3 startPosition = polygonData[start].PartsPosition(joint);
                             Vector3 endPosition = polygonData[end + 1].PartsPosition(joint);
@@ -424,6 +471,8 @@ namespace EnvironmentMaker {
             int index = existsIndexes.Keys.ToList().IndexOfMin(i => Math.Abs(k - i));
             int key = existsIndexes.Keys.ToList()[index];
             Vector3 histgramIndex = polygonData[k].SearchHistgram(averageHistgram, existsIndexes[key]);
+            //if (k == 1) 
+            //    print(k + "の" + Enum.GetName(typeof(JointType), firstJoint) + "のHistgramIndex:" + histgramIndex.ToString());
             if ((histgramIndex - existsIndexes[key]).sqrMagnitude > 4) {
                 return Vector3.zero;
             }
@@ -434,6 +483,10 @@ namespace EnvironmentMaker {
                 existsIndexes[k] = histgramIndex;
             }
             Vector3 position = polygonData[k].Voxel.GetPositionFromIndex(histgramIndex);
+            //if (k == 1)
+            //    print(k + "の" + Enum.GetName(typeof(JointType), firstJoint) + "position:" + position.ToString());
+            //if (k == 1)
+            //    print(k + "の" + Enum.GetName(typeof(JointType), firstJoint) + "firstBodyParts:" + firstBodyParts[k, (int)firstJoint].ToString());
             return this.transform.position + position - firstBodyParts[k, (int)firstJoint];
         }
 
@@ -454,7 +507,6 @@ namespace EnvironmentMaker {
                     foreach (var p in reader.Load(fileName)) {
                         plist.Add(p);
                     }
-                    //yield return n;
                     if (i > 0) {
                         var source = new List<Point>();
                         for (int j = 0; j < i; j++) {
@@ -462,30 +514,18 @@ namespace EnvironmentMaker {
                         }
                         var sourceBorder = PolygonData.BorderPoints(source);
                         var destBorder = PolygonData.BorderPoints(plist);
-                        //yield return n;
-                        //var sourceLine = CalcLine(SelectPoint(plist, source));
-                        //var destLine = CalcLine(SelectPoint(source, plist));
                         float diffY = (float)PolygonData.CalcY(sourceBorder, destBorder);
-                        //yield return n;
-                        //var diffXZ = CalcXZ(sourceLine, destLine);
                         if (diffY < 0.2) {
                             plist = plist.Select(p => p - new Vector3(0, diffY, 0)).ToList();
                         }
                     }
                     pointlist[i] = plist;
-                    //yield return n;
                 }
-                //ApplyXZ(pointlist);
                 polygonData[n] = new PolygonData(dir, pointlist);
-                //yield return n;
             }
             var standard = polygonData[0].SetFirstEstimate();
-            ////yield return 0;
-            //InitPartsCorrection();
             for (int i = 1; i < FrameAmount; i++) {
                 polygonData[i].EstimateHip(standard);
-                //yield return i;
-                //CalcPartsCorrection(completeMerge[i].ToList(), i);
             }
             var diff = Functions.AverageVector(polygonData[0].Complete.Select(p => p.GetVector3()).ToList());
             this.transform.position -= diff;
@@ -493,6 +533,7 @@ namespace EnvironmentMaker {
             if (!manager.Data.ContainsKey(dir)) {
                 manager.SetData(dir, this.polygonData);
             }
+            firstBodyParts = new Vector3[FrameAmount, Enum.GetNames(typeof(JointType)).Length];
             loadEnd = true;
         }
 
@@ -642,36 +683,62 @@ namespace EnvironmentMaker {
 
         private void OnGUI() {
             GUI.TextArea(new Rect(0, 0, 100, 20), "選択中");
-            GUI.TextArea(new Rect(0, 20, 100, 20), Enum.GetName(typeof(JointType), selectedType));
+            GUI.TextArea(new Rect(0, 20, 100, 20), movePointCloud ? selectedPCNumber.ToString() : Enum.GetName(typeof(JointType), selectedType));
 
-            if (stopped) {
+            if (loadEnd && stopped) {
                 int before = pointsNumbers[0];
-                pointsNumbers[0] = (int)GUI.HorizontalScrollbar(new Rect(0, 580, 800, 20), before, 1, 0, FrameAmount);
+                int barHeight = 20;
+                pointsNumbers[0] = (int)GUI.HorizontalScrollbar(new Rect(0, Screen.height - barHeight, Screen.width, barHeight), before, 1, 0, FrameAmount);
                 if (before != pointsNumbers[0]) {
                     AdjustStopCamera(before);
                 }
                 GUI.TextArea(new Rect(100, 0, 100, 20), pointsNumbers[0].ToString());
             }
 
-            if (GUI.Button(new Rect(700, 0, 100, 100), "終わる")) {
+            int finishWidth = 100;
+            if (GUI.Button(new Rect(Screen.width - finishWidth, 0, finishWidth, 100), "終わる")) {
                 SaveData();
                 Application.Quit();
             }
 
-            if (GUI.Button(new Rect(600, 0, 100, 100), "保存")) {
+            int saveWidth = 100;
+            if (GUI.Button(new Rect(Screen.width - finishWidth - saveWidth, 0, saveWidth, 100), "保存")) {
                 SaveData();
+            }
+
+            int switchWidth = 100;
+            if (GUI.Button(new Rect(Screen.width - finishWidth - saveWidth - switchWidth, 0, switchWidth, 100), movePointCloud ? "点群移動モード" : "トラッキング\nモード")) {
+                movePointCloud = !movePointCloud;
+                if (movePointCloud) {
+                    SwitchToMovePointCloud();
+                } else {
+                    SwitchToTracking();
+                }
             }
 
             var beforeDir = tmpDirName;
             GUI.TextArea(new Rect(100, 40, 100, 20), "モーション名");
             tmpDirName = GUI.TextArea(new Rect(100, 60, 100, 20), beforeDir);
             if (beforeDir != tmpDirName && tmpDirName != "" && DirName != tmpDirName && Directory.Exists(@"polygons/" + tmpDirName)) {
-                SaveData();
+                if (DirName != "") {
+                    SaveData();
+                }
                 DirName = tmpDirName;
                 LoadModels(DirName);
                 LoadIndexCSV(DirName);
                 LoadBodyDump(DirName);
+                UpdateMesh();
             }
+        }
+
+        private void SwitchToMovePointCloud() {
+            selectedPointer.SetActive(false);
+            pointers[(int)selectedType].SetActive(false);
+        }
+
+        private void SwitchToTracking() {
+            selectedPointer.SetActive(true);
+            pointers[(int)selectedType].SetActive(true);
         }
 
         private void SaveData() {

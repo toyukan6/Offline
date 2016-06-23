@@ -10,15 +10,24 @@ using UnityLib;
 
 namespace EnvironmentMaker {
     class PolygonData {
-        public Vector3[][] Positions { get; private set; }
-        public Color[][] Colors { get; private set; }
-        public List<Point> Complete { get; private set; }
+        public Point[][] KinectPoints { get; private set; }
+        public List<Point> Complete {
+            get {
+                var c = new List<Point>();
+                for (int i = 0; i < KinectPoints.Length; i++) {
+                    var newK = KinectPoints[i].Select(p => p += PointCloudOffsets[i]);
+                    c = c.Concat(newK).ToList();
+                }
+                return c;
+            }
+        }
         public List<Point> Merge { get; private set; }
         public Voxel<List<Point>> Voxel { get; private set; }
         public Voxel<List<Point>> AnotherVoxel { get; private set; }
         const int SECTIONNUMBER = 64;
         public Dictionary<JointType, Vector3> Offsets { get; private set; }
         public Dictionary<JointType, Vector3> PartsCorrection { get; private set; }
+        public Vector3[] PointCloudOffsets { get; private set; }
         public List<Point>[] Points;
         public Vector3 Estimate { get; private set; }
         public string Name { get; private set; }
@@ -28,15 +37,13 @@ namespace EnvironmentMaker {
         public PolygonData(string name, List<Point>[] points, bool simple = false) {
             Name = name;
             this.Points = points;
-            Positions = new Vector3[points.Length][];
-            Colors = new Color[points.Length][];
-            Complete = new List<Point>();
+            PointCloudOffsets = new Vector3[points.Length];
+            KinectPoints = new Point[points.Length][];
             Merge = new List<Point>();
             for (int i = 0; i < points.Length; i++) {
-                Positions[i] = points[i].Select(p => p.GetVector3()).ToArray();
-                Colors[i] = points[i].Select(p => p.GetColor()).ToArray();
-                Complete = Complete.Concat(points[i]).ToList();
+                KinectPoints[i] = points[i].ToArray();
                 Merge = Merge.Concat(ReducePoints(points[i])).ToList();
+                PointCloudOffsets[i] = Vector3.zero;
             }
             Offsets = new Dictionary<JointType, Vector3>();
             PartsCorrection = new Dictionary<JointType, Vector3>();
@@ -143,6 +150,15 @@ namespace EnvironmentMaker {
             } else {
                 Estimate = Vector3.zero;
             }
+        }
+
+        public void Reset(JointType type) {
+            Offsets[type] = Vector3.zero;
+            PartsCorrection[type] = Vector3.zero;
+        }
+
+        public Vector3 OffsetsAndCorrection(JointType type) {
+            return Offsets[type] + PartsCorrection[type];
         }
 
         public Vector3 PartsPosition(JointType type) {
@@ -362,20 +378,35 @@ namespace EnvironmentMaker {
             return ((index - result).magnitude < (index - anotherResult).magnitude ? result : anotherResult);
         }
 
-        public void Save(BinaryWriter bwriter) {
-            bwriter.Write(Offsets.Count);
-            foreach (var o in Offsets) {
-                bwriter.Write((int)o.Key);
-                bwriter.Write(o.Value.x);
-                bwriter.Write(o.Value.y);
-                bwriter.Write(o.Value.z);
+        public void Save(StreamWriter bwriter) {
+            var joints = Enum.GetValues(typeof(JointType));
+            foreach (JointType j in joints) {
+                var vec = PartsPosition(j);
+                bwriter.Write(Enum.GetName(typeof(JointType), j) + " ");
+                bwriter.Write(vec.x + " ");
+                bwriter.Write(vec.y + " ");
+                bwriter.WriteLine(vec.z);
             }
-            bwriter.Write(PartsCorrection.Count);
-            foreach (var pc in PartsCorrection) {
-                bwriter.Write((int)pc.Key);
-                bwriter.Write(pc.Value.x);
-                bwriter.Write(pc.Value.y);
-                bwriter.Write(pc.Value.z);
+        }
+
+        public void SavePointCloud(string dir) {
+            string path = Path.Combine(dir, Name);
+            using (StreamWriter writer = new StreamWriter(path + ".ply")) {
+                writer.WriteLine(string.Format(@"ply
+format ascii 1.0
+comment KinectMotionCapture
+element vertex {0}
+property float x
+property float y
+property float z
+property uchar red
+property uchar green
+property uchar blue
+end_header
+", Complete.Count));
+                foreach (var p in Complete) {
+                    writer.WriteLine(p.GetSaveFormat());
+                }
             }
         }
 

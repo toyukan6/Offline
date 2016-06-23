@@ -14,6 +14,7 @@ namespace EnvironmentMaker {
         static string extensions = ".pldt";
         static string histgramsDataName = "motion.dat";
         static string characterValueName = "charavalue.dat";
+        static string resultDir { get { return "result"; } }
         PlyReader reader = new PlyReader();
 
         private void Awake() {
@@ -39,17 +40,25 @@ namespace EnvironmentMaker {
 
         public static void Save() {
             foreach (var d in Instance.Data) {
-                using (var stream = new FileStream(d.Key + extensions, FileMode.OpenOrCreate)) {
-                    using (var bwriter = new BinaryWriter(stream)) {
-                        bwriter.Write(d.Key);
-                        bwriter.Write(d.Value.Length);
-                        foreach (var pd in d.Value) {
-                            pd.Save(bwriter);
-                        }
+                string dir = Path.Combine(resultDir, d.Key);
+                if (!Directory.Exists(dir)) {
+                    Directory.CreateDirectory(dir);
+                }
+                string file = dir + "/" + d.Key + extensions;
+                if (!File.Exists(file)) {
+                    File.Create(file);
+                }
+                using (var writer = new StreamWriter(file, false)) {
+                    writer.WriteLine(d.Key);
+                    for (int i = 0; i < d.Value.Length; i++) {
+                        writer.WriteLine(i);
+                        d.Value[i].Save(writer);
                     }
                 }
+                for (int i = 0; i < d.Value.Length; i++) {
+                    d.Value[i].SavePointCloud(dir);
+                }
             }
-            SaveHistgrams();
         }
 
         public static void Load(string key) {
@@ -62,47 +71,6 @@ namespace EnvironmentMaker {
                             for (int i = 0; i < length; i++) {
                                 Instance.Data[key][i].Load(breader);
                             }
-                        }
-                    }
-                }
-            }
-        }
-
-        public static void SaveHistgrams() {
-            using (var stream = new FileStream(histgramsDataName, FileMode.OpenOrCreate)) {
-                using (var bwriter = new BinaryWriter(stream)) {
-                    bwriter.Write(Instance.Histgrams.Count);
-                    foreach (var h in Instance.Histgrams) {
-                        bwriter.Write(h.Key);
-                        bwriter.Write(h.Value.Length);
-                        for (int i = 0; i < h.Value.Length; i++) {
-                            bwriter.Write(h.Value[i].Length);
-                            for (int j = 0; j < h.Value[i].Length; j++) {
-                                bwriter.Write(h.Value[i][j]);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        public static void LoadHistgrams() {
-            if (File.Exists(histgramsDataName)) {
-                using (var stream = new FileStream(histgramsDataName, FileMode.OpenOrCreate)) {
-                    using (var breader = new BinaryReader(stream)) {
-                        int hcount = breader.ReadInt32();
-                        for (int i = 0; i < hcount; i++) {
-                            string key = breader.ReadString();
-                            int count = breader.ReadInt32();
-                            var histgram = new double[count][];
-                            for (int j = 0; j < count; j++) {
-                                int jcount = breader.ReadInt32();
-                                histgram[j] = new double[jcount];
-                                for (int k = 0; k < jcount; k++) {
-                                    histgram[j][k] = breader.ReadDouble();
-                                }
-                            }
-                            Instance.Histgrams[key] = histgram;
                         }
                     }
                 }

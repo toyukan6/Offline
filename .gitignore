@@ -22,3 +22,5 @@ Thumbs.db
 compilation log.txt
 Test.unity
 Textures/*
+result/*
+*.pldt
