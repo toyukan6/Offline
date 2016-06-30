@@ -56,7 +56,7 @@ namespace EnvironmentMaker {
                     }
                 }
                 for (int i = 0; i < d.Value.Length; i++) {
-                    d.Value[i].SavePointCloud(dir);
+                    d.Value[i].SavePointCloud(dir, i);
                 }
             }
         }

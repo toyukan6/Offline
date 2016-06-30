@@ -389,9 +389,9 @@ namespace EnvironmentMaker {
             }
         }
 
-        public void SavePointCloud(string dir) {
+        public void SavePointCloud(string dir, int i) {
             string path = Path.Combine(dir, Name);
-            using (StreamWriter writer = new StreamWriter(path + ".ply")) {
+            using (StreamWriter writer = new StreamWriter(path + "_" + i.ToString() + ".ply")) {
                 writer.WriteLine(string.Format(@"ply
 format ascii 1.0
 comment KinectMotionCapture
