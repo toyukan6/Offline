@@ -1,4 +1,4 @@
-﻿    using MathNet.Numerics.Statistics;
+﻿using MathNet.Numerics.Statistics;
 using System;
 using System.Collections.Generic;
 using System.IO;

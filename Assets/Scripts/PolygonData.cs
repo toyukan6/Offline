@@ -392,17 +392,17 @@ namespace EnvironmentMaker {
         public void SavePointCloud(string dir, int i) {
             string path = Path.Combine(dir, Name);
             using (StreamWriter writer = new StreamWriter(path + "_" + i.ToString() + ".ply")) {
-                writer.WriteLine(string.Format(@"ply
-format ascii 1.0
-comment KinectMotionCapture
-element vertex {0}
-property float x
-property float y
-property float z
-property uchar red
-property uchar green
-property uchar blue
-end_header
+                writer.WriteLine(string.Format(@"ply\n
+format ascii 1.0\n
+comment KinectMotionCapture\n
+element vertex {0}\n
+property float x\n
+property float y\n
+property float z\n
+property uchar red\n
+property uchar green\n
+property uchar blue\n
+end_header\n
 ", Complete.Count));
                 foreach (var p in Complete) {
                     writer.WriteLine(p.GetSaveFormat());

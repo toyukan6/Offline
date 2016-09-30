@@ -48,7 +48,7 @@ namespace EnvironmentMaker {
                 if (!File.Exists(file)) {
                     File.Create(file);
                 }
-                using (var writer = new StreamWriter(file, false)) {
+                using (var writer = new StreamWriter(file)) {
                     writer.WriteLine(d.Key);
                     for (int i = 0; i < d.Value.Length; i++) {
                         writer.WriteLine(i);
