@@ -290,9 +290,15 @@ namespace EnvironmentMaker {
                 }
             }
             if (reworkIndexes.Count > 0) {
+                HeadCorrection(reworkIndexes);
                 ArmCorrection(reworkIndexes);
                 LegCorrection(reworkIndexes);
             }
+        }
+
+        private void HeadCorrection(List<int> reworkIndexes) {
+            var partsNames = new[] { "SpineShoulder", "Neck", "Head" };
+            EitherCorrection(reworkIndexes, partsNames);
         }
 
         private void ArmCorrection(List<int> reworkIndexes) {
@@ -426,8 +432,7 @@ namespace EnvironmentMaker {
                         var beforePosition = polygonData[s].PartsPosition(beforeJoint);
                         var nowPosition = polygonData[s].PartsPosition(joint) + result;
                         result = (nowPosition - beforePosition).normalized * length + beforePosition - polygonData[s].PartsPosition(joint);
-                        //if (s == 1)
-                        //    print(s + "の" + Enum.GetName(typeof(JointType), joint) + ":" + result);
+                        print(s + "の" + Enum.GetName(typeof(JointType), joint) + ":" + result);
                         polygonData[s].PartsCorrection[joint] = result;
                     }
                 }
